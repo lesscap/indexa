@@ -1,0 +1,28 @@
+{
+  "name": "@indexa/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/start.ts",
+    "build": "tsc",
+    "start": "node dist/start.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "fastify": "^5.2.1",
+    "fastify-plugin": "^5.0.1",
+    "minimist": "^1.2.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.12",
+    "@types/minimist": "^1.2.5",
+    "@types/node": "^25.0.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.18"
+  }
+}
