@@ -1,5 +1,6 @@
 import { BrowserRouter, useRoutes } from 'react-router-dom'
 import { routes } from './routes'
+import { SessionProvider } from './session'
 
 export const AppRoutes = () => {
   return useRoutes(routes)
@@ -7,8 +8,10 @@ export const AppRoutes = () => {
 
 export const App = () => {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <SessionProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </SessionProvider>
   )
 }

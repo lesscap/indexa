@@ -1,39 +1,65 @@
-import { Database, Sparkles } from 'lucide-react'
-import { Link, Outlet } from 'react-router-dom'
+import { Database, LogOut } from 'lucide-react'
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useSession } from '@/app/session'
 import { Button } from '@/components/ui/button'
 
 export const AppShell = () => {
-  return (
-    <div className="min-h-screen px-6 py-8 md:px-10">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col rounded-[2rem] border border-border/70 bg-card/90 p-6 shadow-[0_24px_80px_rgba(24,51,35,0.08)] backdrop-blur md:p-8">
-        <header className="flex flex-col gap-5 border-b border-border/70 pb-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <p className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5" />
-              Knowledge Infrastructure
-            </p>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                Indexa Control Plane
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-                Monorepo scaffold for a SyncChat-style knowledge base system, with a React console
-                and Fastify backend ready for domain modules.
-              </p>
-            </div>
-          </div>
-          <Button asChild variant="outline" size="lg">
-            <Link to="/knowledge-bases">
-              <Database className="mr-2 h-4 w-4" />
-              Knowledge Bases
-            </Link>
-          </Button>
-        </header>
+  const { session, isResolved, logout } = useSession()
+  const location = useLocation()
 
-        <main className="flex-1 py-8">
-          <Outlet />
-        </main>
-      </div>
+  if (!isResolved) {
+    return <div className="min-h-screen bg-background" />
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-border/80 bg-card/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+          <div className="flex items-center gap-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Indexa
+              </p>
+              <p className="mt-1 text-lg font-semibold tracking-tight text-foreground">Console</p>
+            </div>
+
+            <nav className="flex items-center gap-2 rounded-full border border-border bg-secondary/60 p-1">
+              <NavLink
+                to="/libraries"
+                className={({ isActive }) =>
+                  [
+                    'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition',
+                    isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                  ].join(' ')
+                }
+              >
+                <Database className="h-4 w-4" />
+                Libraries
+              </NavLink>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="rounded-full border border-border bg-background px-4 py-2 text-sm">
+              <span className="text-muted-foreground">{session.domain.name}</span>
+              <span className="mx-2 text-border">/</span>
+              <span className="font-medium text-foreground">{session.name}</span>
+            </div>
+            <Button onClick={() => void logout()} size="sm" variant="outline">
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-8 md:px-8">
+        <Outlet />
+      </main>
     </div>
   )
 }

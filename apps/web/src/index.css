@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: oklch(0.98 0.01 95);
-  --foreground: oklch(0.24 0.03 250);
-  --card: oklch(0.99 0.01 95);
-  --card-foreground: oklch(0.24 0.03 250);
-  --primary: oklch(0.57 0.17 151);
-  --primary-foreground: oklch(0.99 0.01 95);
-  --secondary: oklch(0.92 0.03 95);
-  --secondary-foreground: oklch(0.29 0.04 250);
-  --muted: oklch(0.95 0.02 95);
-  --muted-foreground: oklch(0.52 0.03 250);
-  --border: oklch(0.88 0.02 95);
-  --ring: oklch(0.57 0.17 151);
+  --background: oklch(0.985 0.004 255);
+  --foreground: oklch(0.27 0.024 258);
+  --card: oklch(0.995 0.003 255);
+  --card-foreground: oklch(0.27 0.024 258);
+  --primary: oklch(0.61 0.145 254);
+  --primary-foreground: oklch(0.99 0.004 255);
+  --secondary: oklch(0.955 0.009 250);
+  --secondary-foreground: oklch(0.35 0.026 258);
+  --muted: oklch(0.965 0.007 252);
+  --muted-foreground: oklch(0.56 0.02 257);
+  --border: oklch(0.905 0.01 252);
+  --ring: oklch(0.61 0.145 254);
   --radius: 1rem;
 }
 
@@ -41,14 +41,19 @@ body {
   background:
     radial-gradient(
       circle at top left,
-      color-mix(in oklch, var(--primary) 16%, white) 0%,
-      transparent 34%
+      color-mix(in oklch, var(--primary) 12%, white) 0%,
+      transparent 30%
     ),
-    linear-gradient(180deg, oklch(0.99 0.01 95) 0%, oklch(0.96 0.02 95) 100%);
+    radial-gradient(circle at top right, oklch(0.96 0.018 240) 0%, transparent 26%),
+    linear-gradient(180deg, oklch(0.992 0.004 255) 0%, oklch(0.968 0.008 252) 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
 }
 
 #root {
   min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
 }
