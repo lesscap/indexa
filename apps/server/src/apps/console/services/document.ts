@@ -8,13 +8,33 @@ import type { MultipartFile } from '@fastify/multipart'
 import { storage as storageConfig } from '../../../config/app.js'
 import type { WebApplication } from '../../../types.js'
 
+type DocumentStorageLibrary = {
+  id: string
+  slug: string
+  activeIndexId: string | null
+  domain: {
+    slug: string
+  }
+}
+
+type QueueStoredDocumentInput = {
+  prisma: WebApplication['$prisma']
+  library: DocumentStorageLibrary
+  filename: string
+  mimeType: string
+  sizeBytes: bigint
+  checksumSha256: string
+  storagePath: string
+  documentId?: string
+}
+
 type UploadDocumentInput = {
   currentDomainId: string
   libraryId: string
   file: MultipartFile
 }
 
-const toDocumentSummary = <
+export const toDocumentSummary = <
   T extends {
     id: string
     title: string
@@ -60,18 +80,42 @@ const toDocumentSummary = <
   }
 }
 
-const sanitizeExtension = (filename: string) => {
+export const sanitizeExtension = (filename: string) => {
   return path
     .extname(filename)
     .toLowerCase()
     .replace(/[^a-z0-9.]/g, '')
 }
 
-const getDocumentTitle = (filename: string) => {
+export const getDocumentTitle = (filename: string) => {
   const extension = path.extname(filename)
   const title = path.basename(filename, extension).trim()
 
   return title || 'Untitled Document'
+}
+
+export const getDocumentStoragePaths = (
+  library: Pick<DocumentStorageLibrary, 'slug' | 'domain'>,
+  documentId: string,
+  filename: string,
+) => {
+  const extension = sanitizeExtension(filename)
+  const relativeDirectory = path.join(
+    'domains',
+    library.domain.slug,
+    'libraries',
+    library.slug,
+    'documents',
+    documentId,
+  )
+  const relativePath = path.join(relativeDirectory, `source${extension}`)
+
+  return {
+    relativeDirectory,
+    relativePath,
+    absoluteDirectory: path.join(storageConfig.documentRoot, relativeDirectory),
+    absolutePath: path.join(storageConfig.documentRoot, relativePath),
+  }
 }
 
 const saveSourceFile = async (file: MultipartFile, targetPath: string) => {
@@ -94,6 +138,70 @@ const saveSourceFile = async (file: MultipartFile, targetPath: string) => {
   return {
     checksumSha256: digest.digest('hex'),
     sizeBytes,
+  }
+}
+
+export const queueStoredDocument = async ({
+  prisma,
+  library,
+  filename,
+  mimeType,
+  sizeBytes,
+  checksumSha256,
+  storagePath,
+  documentId = randomUUID(),
+}: QueueStoredDocumentInput) => {
+  if (!library.activeIndexId) {
+    return {
+      ok: false as const,
+      code: 'LIBRARY_INDEX_MISSING',
+      message: 'Library does not have an active index.',
+    }
+  }
+
+  const created = await prisma.$transaction(async tx => {
+    const document = await tx.document.create({
+      data: {
+        id: documentId,
+        libraryId: library.id,
+        title: getDocumentTitle(filename),
+        originalName: filename,
+        mimeType,
+        sizeBytes,
+        checksumSha256,
+        storagePath,
+      },
+    })
+
+    const documentIndexState = await tx.documentIndexState.create({
+      data: {
+        documentId,
+        libraryIndexId: library.activeIndexId!,
+        status: 'QUEUED',
+      },
+    })
+
+    const job = await tx.indexJob.create({
+      data: {
+        documentId,
+        libraryId: library.id,
+        libraryIndexId: library.activeIndexId!,
+        documentIndexStateId: documentIndexState.id,
+        type: 'INDEX_DOCUMENT',
+        status: 'QUEUED',
+      },
+    })
+
+    return {
+      document,
+      documentIndexState,
+      job,
+    }
+  })
+
+  return {
+    ok: true as const,
+    data: created,
   }
 }
 
@@ -171,21 +279,13 @@ export const DocumentService = (app: WebApplication) => {
       }
     }
 
-    const activeIndexId = library.activeIndexId
     const documentId = randomUUID()
     const filename = file.filename || 'document'
-    const extension = sanitizeExtension(filename)
-    const relativeDirectory = path.join(
-      'domains',
-      library.domain.slug,
-      'libraries',
-      library.slug,
-      'documents',
+    const { relativePath, absoluteDirectory, absolutePath } = getDocumentStoragePaths(
+      library,
       documentId,
+      filename,
     )
-    const relativePath = path.join(relativeDirectory, `source${extension}`)
-    const absoluteDirectory = path.join(storageConfig.documentRoot, relativeDirectory)
-    const absolutePath = path.join(storageConfig.documentRoot, relativePath)
 
     await mkdir(absoluteDirectory, { recursive: true })
 
@@ -195,45 +295,22 @@ export const DocumentService = (app: WebApplication) => {
       const fileSummary = await saveSourceFile(file, absolutePath)
       saved = true
 
-      const created = await app.$prisma.$transaction(async prisma => {
-        const document = await prisma.document.create({
-          data: {
-            id: documentId,
-            libraryId,
-            title: getDocumentTitle(filename),
-            originalName: filename,
-            mimeType: file.mimetype || 'application/octet-stream',
-            sizeBytes: fileSummary.sizeBytes,
-            checksumSha256: fileSummary.checksumSha256,
-            storagePath: relativePath,
-          },
-        })
-
-        const documentIndexState = await prisma.documentIndexState.create({
-          data: {
-            documentId,
-            libraryIndexId: activeIndexId,
-            status: 'QUEUED',
-          },
-        })
-
-        const job = await prisma.indexJob.create({
-          data: {
-            documentId,
-            libraryId,
-            libraryIndexId: activeIndexId,
-            documentIndexStateId: documentIndexState.id,
-            type: 'INDEX_DOCUMENT',
-            status: 'QUEUED',
-          },
-        })
-
-        return {
-          document,
-          documentIndexState,
-          job,
-        }
+      const queued = await queueStoredDocument({
+        prisma: app.$prisma,
+        library,
+        documentId,
+        filename,
+        mimeType: file.mimetype || 'application/octet-stream',
+        sizeBytes: fileSummary.sizeBytes,
+        checksumSha256: fileSummary.checksumSha256,
+        storagePath: relativePath,
       })
+
+      if (!queued.ok) {
+        return queued
+      }
+
+      const created = queued.data
 
       return {
         ok: true as const,

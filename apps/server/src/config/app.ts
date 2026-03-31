@@ -20,4 +20,5 @@ export const session = {
 
 export const storage = {
   documentRoot: process.env.DOCUMENT_STORAGE_ROOT || path.join(appRoot, 'storage'),
+  uploadRoot: process.env.UPLOAD_STORAGE_ROOT || path.join(appRoot, 'storage', '_uploads'),
 }

@@ -55,6 +55,9 @@ export const createApp = ({ config, services }: CreateAppOptions) => {
   })
 
   app.register(fastifyMultipart)
+  app.addContentTypeParser(/^application\/offset\+octet-stream(;.*)?$/, (_request, payload, done) =>
+    done(null, payload),
+  )
   app.register(Service, services ? { services } : {})
   app.register(Router, { routes: config.routes })
 

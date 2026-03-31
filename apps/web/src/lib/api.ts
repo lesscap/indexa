@@ -67,6 +67,19 @@ export type DocumentSummary = {
   } | null
 }
 
+export type UploadSessionSummary = {
+  id: string
+  tusUploadId: string
+  originalName: string
+  mimeType: string
+  sizeBytes: string
+  bytesReceived: string
+  status: string
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type ApiClientError = Error & {
   code: string
   status: number
@@ -176,6 +189,28 @@ export const listDocuments = async (libraryId: string) => {
   )
 
   return data.list
+}
+
+export const listUploads = async (libraryId: string) => {
+  const data = await request<{ list: UploadSessionSummary[] }>(
+    `/api/console/libraries/${libraryId}/uploads`,
+  )
+
+  return data.list
+}
+
+export const cancelTusUpload = async (tusUploadId: string) => {
+  const response = await fetch(`/api/console/uploads/${tusUploadId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: {
+      'Tus-Resumable': '1.0.0',
+    },
+  })
+
+  if (!response.ok && response.status !== 204) {
+    throw createApiError('Failed to cancel upload.', 'UPLOAD_CANCEL_FAILED', response.status)
+  }
 }
 
 export const uploadDocument = async (libraryId: string, file: File) => {

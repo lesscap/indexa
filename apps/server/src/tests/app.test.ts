@@ -261,4 +261,97 @@ describe('Indexa server', () => {
 
     await app.close()
   })
+
+  it('lists upload sessions for the current domain library', async () => {
+    const salt = 'test-salt-000000'
+    const mockPrisma = {
+      user: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'user-1',
+          domainId: 'domain-1',
+          username: 'admin',
+          name: 'Indexa Admin',
+          passwordSalt: salt,
+          passwordHashed: hashPassword('indexa123456', salt),
+          disabled: false,
+          domain: {
+            id: 'domain-1',
+            slug: 'dev-console',
+            name: 'Dev Console Domain',
+          },
+        }),
+      },
+      library: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'library-1',
+        }),
+      },
+      uploadSession: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'upload-1',
+            tusUploadId: 'tus-1',
+            originalName: 'architecture.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 4096n,
+            bytesReceived: 1024n,
+            status: 'UPLOADING',
+            errorMessage: null,
+            createdAt: new Date('2026-03-31T08:00:00.000Z'),
+            updatedAt: new Date('2026-03-31T08:00:02.000Z'),
+          },
+        ]),
+      },
+      $disconnect: vi.fn(),
+    }
+    const app = createApp({
+      config: getAppConfig('console'),
+      services: {
+        $prisma: mockPrisma as never,
+      },
+    })
+    const { cookie } = await login(app, {
+      username: 'admin',
+      password: 'indexa123456',
+    })
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/console/libraries/library-1/uploads',
+      headers: {
+        cookie,
+      },
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(mockPrisma.library.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'library-1',
+        domainId: 'domain-1',
+      },
+      select: {
+        id: true,
+      },
+    })
+    expect(response.json()).toEqual({
+      success: true,
+      data: {
+        list: [
+          {
+            id: 'upload-1',
+            tusUploadId: 'tus-1',
+            originalName: 'architecture.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: '4096',
+            bytesReceived: '1024',
+            status: 'UPLOADING',
+            errorMessage: null,
+            createdAt: '2026-03-31T08:00:00.000Z',
+            updatedAt: '2026-03-31T08:00:02.000Z',
+          },
+        ],
+      },
+    })
+
+    await app.close()
+  })
 })
