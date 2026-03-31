@@ -1,7 +1,7 @@
-import { Routes as KnowledgeBaseRoutes } from '../../apps/knowledge-base/routes.js'
+import { Routes as ConsoleRoutes } from '../../apps/console/routes.js'
 import { Routes as SystemRoutes } from '../../apps/system/routes.js'
 
-export type AppType = 'knowledge-base'
+export type AppType = 'console' | 'runtime'
 
 export type AppConfig = {
   routes: Record<string, unknown>
@@ -11,10 +11,15 @@ export type AppConfig = {
 
 export const getAppConfig = (appType: AppType): AppConfig => {
   const configs: Record<AppType, AppConfig> = {
-    'knowledge-base': {
-      routes: { ...SystemRoutes, ...KnowledgeBaseRoutes },
+    console: {
+      routes: { ...SystemRoutes, ...ConsoleRoutes },
       port: 4110,
-      name: 'Indexa Knowledge Base API',
+      name: 'Indexa Console API',
+    },
+    runtime: {
+      routes: { ...SystemRoutes },
+      port: 4120,
+      name: 'Indexa Runtime API',
     },
   }
 

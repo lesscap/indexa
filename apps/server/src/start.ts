@@ -6,7 +6,7 @@ import { createApp, listen } from './runners/server/index.js'
 
 const start = async () => {
   const args = minimist(process.argv.slice(2))
-  const appType = (args.app || 'knowledge-base') as AppType
+  const appType = (args.app || 'console') as AppType
   const port = args.port || args.p
 
   const config = getAppConfig(appType)
