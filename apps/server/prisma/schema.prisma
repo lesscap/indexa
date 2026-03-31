@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DomainStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum LibraryStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum EmbeddingProvider {
+  QWEN
+}
+
+enum EmbeddingProfileStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum DistanceMetric {
+  COSINE
+}
+
+enum LibraryIndexStatus {
+  QUEUED
+  RUNNING
+  ACTIVE
+  FAILED
+  ARCHIVED
+}
+
+enum DocumentIndexStateStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum IndexJobType {
+  INDEX_DOCUMENT
+  REINDEX_DOCUMENT
+}
+
+enum IndexJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum IndexJobStage {
+  PARSING
+  CHUNKING
+  EMBEDDING
+  UPSERTING
+  FINALIZING
+}
+
+model Domain {
+  id                String             @id @default(cuid())
+  slug              String             @unique @db.VarChar(64)
+  name              String             @db.VarChar(128)
+  description       String?            @db.Text
+  status            DomainStatus       @default(ACTIVE)
+  libraries         Library[]
+  embeddingProfiles EmbeddingProfile[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Library {
+  id            String         @id @default(cuid())
+  domainId      String
+  slug          String         @db.VarChar(64)
+  name          String         @db.VarChar(128)
+  description   String?        @db.Text
+  status        LibraryStatus  @default(ACTIVE)
+  activeIndexId String?
+  domain        Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  documents     Document[]
+  indexes       LibraryIndex[] @relation("LibraryToIndexes")
+  activeIndex   LibraryIndex?  @relation("LibraryActiveIndex", fields: [activeIndexId], references: [id], onDelete: SetNull)
+  jobs          IndexJob[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([domainId, slug])
+  @@index([domainId, status])
+}
+
+model Document {
+  id             String         @id @default(cuid())
+  libraryId      String
+  title          String         @db.VarChar(255)
+  originalName   String         @db.VarChar(255)
+  mimeType       String         @db.VarChar(128)
+  sizeBytes      BigInt
+  checksumSha256 String         @db.VarChar(64)
+  storagePath    String         @unique @db.Text
+  library        Library        @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  indexStates    DocumentIndexState[]
+  jobs           IndexJob[]
+  chunks         DocumentChunk[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([libraryId, createdAt])
+}
+
+model EmbeddingProfile {
+  id            String                 @id @default(cuid())
+  domainId      String
+  slug          String                 @db.VarChar(64)
+  name          String                 @db.VarChar(128)
+  provider      EmbeddingProvider
+  model         String                 @db.VarChar(128)
+  dimensions    Int
+  distanceMetric DistanceMetric        @default(COSINE)
+  configJson    Json?
+  status        EmbeddingProfileStatus @default(ACTIVE)
+  isDefault     Boolean                @default(false)
+  domain        Domain                 @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  libraryIndexes LibraryIndex[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([domainId, slug])
+  @@index([domainId, status])
+}
+
+model LibraryIndex {
+  id                   String           @id @default(cuid())
+  libraryId            String
+  embeddingProfileId   String
+  version              Int
+  qdrantCollectionName String           @unique @db.VarChar(191)
+  chunkStrategy        String           @default("recursive_text") @db.VarChar(64)
+  chunkConfig          Json?
+  status               LibraryIndexStatus @default(QUEUED)
+  activatedAt          DateTime?
+  finishedAt           DateTime?
+  library              Library          @relation("LibraryToIndexes", fields: [libraryId], references: [id], onDelete: Cascade)
+  activatedBy          Library[]        @relation("LibraryActiveIndex")
+  embeddingProfile     EmbeddingProfile @relation(fields: [embeddingProfileId], references: [id], onDelete: Restrict)
+  documentIndexStates  DocumentIndexState[]
+  jobs                 IndexJob[]
+  chunks               DocumentChunk[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([libraryId, version])
+  @@index([libraryId, status])
+}
+
+model DocumentIndexState {
+  id            String                   @id @default(cuid())
+  documentId    String
+  libraryIndexId String
+  status        DocumentIndexStateStatus @default(QUEUED)
+  stage         IndexJobStage?
+  lastIndexedAt DateTime?
+  errorMessage  String?                  @db.Text
+  document      Document                 @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  libraryIndex  LibraryIndex             @relation(fields: [libraryIndexId], references: [id], onDelete: Cascade)
+  jobs          IndexJob[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([documentId, libraryIndexId])
+  @@index([libraryIndexId, status])
+  @@index([documentId, status])
+}
+
+model IndexJob {
+  id                  String             @id @default(cuid())
+  libraryId           String
+  documentId          String
+  libraryIndexId      String
+  documentIndexStateId String
+  type                IndexJobType
+  status              IndexJobStatus     @default(QUEUED)
+  stage               IndexJobStage?
+  progressCurrent     Int?
+  progressTotal       Int?
+  progressUnit        String?            @db.VarChar(32)
+  lockedAt            DateTime?
+  workerId            String?            @db.VarChar(128)
+  errorMessage        String?            @db.Text
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  library             Library            @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  document            Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  libraryIndex        LibraryIndex       @relation(fields: [libraryIndexId], references: [id], onDelete: Cascade)
+  documentIndexState  DocumentIndexState @relation(fields: [documentIndexStateId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([libraryId, createdAt])
+  @@index([documentId])
+  @@index([documentIndexStateId, createdAt])
+}
+
+model DocumentChunk {
+  id             String       @id @default(cuid())
+  documentId     String
+  libraryIndexId String
+  chunkNo        Int
+  textPath       String       @db.Text
+  charCount      Int
+  tokenCount     Int?
+  contentHash    String       @db.VarChar(64)
+  qdrantPointId  String       @unique @db.VarChar(191)
+  metadataJson   Json?
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  libraryIndex   LibraryIndex @relation(fields: [libraryIndexId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([documentId, libraryIndexId, chunkNo])
+  @@index([libraryIndexId, chunkNo])
+  @@index([documentId, libraryIndexId])
+}
