@@ -19,7 +19,7 @@ export default defineConfig({
     port: 4025,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4110',
+        target: 'http://127.0.0.1:4026',
         changeOrigin: true,
       },
     },

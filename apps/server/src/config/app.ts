@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 const appRoot = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../..')
 
 export const server = {
-  port: +(process.env.PORT || 4110),
+  port: +(process.env.PORT || 4026),
   host: process.env.HOST || '0.0.0.0',
 }
 

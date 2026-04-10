@@ -13,7 +13,7 @@ export const getAppConfig = (appType: AppType): AppConfig => {
   const configs: Record<AppType, AppConfig> = {
     console: {
       routes: { ...SystemRoutes, ...ConsoleRoutes },
-      port: 4110,
+      port: 4026,
       name: 'Indexa Console API',
     },
     runtime: {
