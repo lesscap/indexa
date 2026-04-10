@@ -192,6 +192,11 @@ export const queueStoredDocument = async ({
       },
     })
 
+    // Wake the Python worker via Postgres LISTEN/NOTIFY. The notification
+    // fires only when this transaction commits, so a rollback here never
+    // produces a phantom wakeup.
+    await tx.$executeRaw`SELECT pg_notify('indexa_job', ${job.id})`
+
     return {
       document,
       documentIndexState,
