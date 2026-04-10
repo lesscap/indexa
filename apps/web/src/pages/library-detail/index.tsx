@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { Spinner } from '@/components/ui/spinner'
 import { DocumentsTable } from './documents-table'
 import { LibraryHeader } from './library-header'
-import { LibraryOverview } from './library-overview'
+import { UploadCard } from './upload-card'
 import { UploadPanel } from './upload-panel'
 import { useLibraryDetail } from './use-library-detail'
 
@@ -20,7 +20,6 @@ export const LibraryDetailPage = () => {
     isLoading,
     library,
     localUploads,
-    uploadCount,
     uploadError,
     uploads,
   } = useLibraryDetail(libraryId)
@@ -42,35 +41,35 @@ export const LibraryDetailPage = () => {
   }
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_22rem]">
-      <section className="space-y-6">
-        <LibraryHeader
-          library={library}
-          fileInputRef={fileInputRef}
-          hasActiveUpload={hasActiveUpload}
-          onFileSelect={event => void handleFileSelect(event)}
-        />
+    <div className="space-y-6">
+      <LibraryHeader library={library} />
 
-        {uploadError ? (
-          <div className="rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
-            {uploadError}
-          </div>
-        ) : null}
+      {uploadError ? (
+        <div className="rounded-[1.5rem] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          {uploadError}
+        </div>
+      ) : null}
 
-        <UploadPanel
-          uploads={uploads}
-          localUploads={localUploads}
-          onCancelLocalUpload={handleCancelLocalUpload}
-          onRetryLocalUpload={upload => void handleRetryLocalUpload(upload)}
-          onCancelRemoteUpload={upload => void handleCancelRemoteUpload(upload)}
-        />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_22rem]">
+        <section>
+          <DocumentsTable documents={documents} />
+        </section>
 
-        <DocumentsTable documents={documents} />
-      </section>
-
-      <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
-        <LibraryOverview library={library} uploadCount={uploadCount} />
-      </aside>
+        <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+          <UploadCard
+            fileInputRef={fileInputRef}
+            hasActiveUpload={hasActiveUpload}
+            onFileSelect={event => void handleFileSelect(event)}
+          />
+          <UploadPanel
+            uploads={uploads}
+            localUploads={localUploads}
+            onCancelLocalUpload={handleCancelLocalUpload}
+            onRetryLocalUpload={upload => void handleRetryLocalUpload(upload)}
+            onCancelRemoteUpload={upload => void handleCancelRemoteUpload(upload)}
+          />
+        </aside>
+      </div>
     </div>
   )
 }

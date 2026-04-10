@@ -1,4 +1,4 @@
-import { RotateCcw, UploadCloud, X } from 'lucide-react'
+import { RotateCcw, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -138,47 +138,36 @@ export const UploadPanel = ({
   const hasLocalUpload = localUploads.length > 0
   const uploadCount = hasLocalUpload ? localUploads.length : uploads.length
 
+  if (uploadCount === 0) {
+    return null
+  }
+
   return (
-    <div className="rounded-[1.75rem] border border-border/80 bg-card/95 p-6 shadow-[0_18px_48px_rgba(24,51,35,0.06)]">
-      <div className="flex flex-col gap-3 border-b border-border/80 pb-5 md:flex-row md:items-end md:justify-between">
+    <div className="rounded-[1.75rem] border border-border/80 bg-card/95 p-5 shadow-[0_18px_48px_rgba(24,51,35,0.06)]">
+      <div className="flex items-center justify-between pb-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            Uploads
+            Active Uploads
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">Resumable Uploads</h2>
+          <h2 className="mt-1 text-base font-semibold tracking-tight">In progress</h2>
         </div>
-        <Badge variant="neutral">{uploadCount} uploads</Badge>
+        <Badge variant="neutral">{uploadCount}</Badge>
       </div>
 
-      {uploadCount === 0 ? (
-        <div className="flex min-h-[10rem] flex-col items-center justify-center gap-4 px-6 text-center">
-          <div className="rounded-3xl bg-primary/10 p-4 text-primary">
-            <UploadCloud className="h-8 w-8" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-semibold tracking-tight">No active uploads</h3>
-            <p className="max-w-md text-sm leading-6 text-muted-foreground">
-              Choose a file to start a resumable upload. Large files can continue after network
-              interruptions.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-5 space-y-4">
-          {hasLocalUpload
-            ? localUploads.map(upload => (
-                <LocalUploadItem
-                  key={upload.id}
-                  upload={upload}
-                  onCancel={onCancelLocalUpload}
-                  onRetry={onRetryLocalUpload}
-                />
-              ))
-            : uploads.map(upload => (
-                <RemoteUploadItem key={upload.id} upload={upload} onCancel={onCancelRemoteUpload} />
-              ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {hasLocalUpload
+          ? localUploads.map(upload => (
+              <LocalUploadItem
+                key={upload.id}
+                upload={upload}
+                onCancel={onCancelLocalUpload}
+                onRetry={onRetryLocalUpload}
+              />
+            ))
+          : uploads.map(upload => (
+              <RemoteUploadItem key={upload.id} upload={upload} onCancel={onCancelRemoteUpload} />
+            ))}
+      </div>
     </div>
   )
 }

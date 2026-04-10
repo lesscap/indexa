@@ -1,21 +1,21 @@
-import { ArrowLeft, FileUp } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
 import type { LibraryDetail } from '@/lib/api'
+import { formatDate } from './utils'
 
 type LibraryHeaderProps = {
   library: LibraryDetail
-  fileInputRef: React.RefObject<HTMLInputElement | null>
-  hasActiveUpload: boolean
-  onFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 
-export const LibraryHeader = ({
-  library,
-  fileInputRef,
-  hasActiveUpload,
-  onFileSelect,
-}: LibraryHeaderProps) => {
+export const LibraryHeader = ({ library }: LibraryHeaderProps) => {
+  const metadata = [
+    library.slug,
+    `${library.documentCount} ${library.documentCount === 1 ? 'doc' : 'docs'}`,
+    library.activeIndex?.embeddingMethod.name ?? 'No embedding method',
+    library.activeIndex ? `index v${library.activeIndex.version}` : 'no active index',
+    `created ${formatDate(library.createdAt)}`,
+  ]
+
   return (
     <div className="space-y-4">
       <Link
@@ -26,29 +26,21 @@ export const LibraryHeader = ({
         Back to Libraries
       </Link>
 
-      <div className="flex flex-col gap-4 rounded-[1.75rem] border border-border/80 bg-card/95 p-6 shadow-[0_18px_48px_rgba(24,51,35,0.06)] md:flex-row md:items-start md:justify-between">
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-            Library Workspace
-          </p>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">{library.name}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {library.description || 'No description yet.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <input ref={fileInputRef} className="hidden" type="file" onChange={onFileSelect} />
-          <Button
-            size="lg"
-            disabled={hasActiveUpload}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <FileUp className="mr-2 h-4 w-4" />
-            {hasActiveUpload ? 'Uploading...' : 'Upload Document'}
-          </Button>
+      <div className="rounded-[1.75rem] border border-border/80 bg-card/95 p-6 shadow-[0_18px_48px_rgba(24,51,35,0.06)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+          Library Workspace
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{library.name}</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          {library.description || 'No description yet.'}
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {metadata.map((item, index) => (
+            <span key={item} className="flex items-center gap-3">
+              {index > 0 ? <span aria-hidden="true">·</span> : null}
+              <span>{item}</span>
+            </span>
+          ))}
         </div>
       </div>
     </div>

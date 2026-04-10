@@ -52,7 +52,6 @@ export const useLibraryDetail = (libraryId: string) => {
     [localUploadList],
   )
   const hasRemoteUpload = useMemo(() => hasLiveRemoteUpload(uploads), [uploads])
-  const visibleUploadCount = hasLocalUpload ? localUploadList.length : uploads.length
   const hasActiveUpload = hasLocalUpload || hasRemoteUpload
 
   useEffect(() => {
@@ -455,7 +454,6 @@ export const useLibraryDetail = (libraryId: string) => {
     library,
     localUploads: localUploadList,
     uploadError,
-    uploadCount: visibleUploadCount,
     uploads,
   }
 }
