@@ -1,4 +1,4 @@
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ type NeighborsState =
   | { status: 'error'; message: string }
 
 const initialNeighborsState: NeighborsState = { status: 'idle' }
+const PAGE_SIZE = 10
 
 export const DocumentDetailPage = () => {
   const { libraryId = '', documentId = '' } = useParams()
@@ -26,6 +27,7 @@ export const DocumentDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [neighborsByChunk, setNeighborsByChunk] = useState<Record<number, NeighborsState>>({})
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     if (!libraryId || !documentId) {
@@ -34,6 +36,8 @@ export const DocumentDetailPage = () => {
     let cancelled = false
     setIsLoading(true)
     setError(null)
+    setPage(1)
+    setNeighborsByChunk({})
     getDocumentChunks(libraryId, documentId)
       .then(payload => {
         if (!cancelled) {
@@ -100,6 +104,10 @@ export const DocumentDetailPage = () => {
 
   const { document, chunks } = data
   const status = document.currentIndexState?.status
+  const totalPages = Math.max(1, Math.ceil(chunks.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * PAGE_SIZE
+  const visibleChunks = chunks.slice(pageStart, pageStart + PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -132,7 +140,7 @@ export const DocumentDetailPage = () => {
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="text-lg font-semibold">Chunks ({chunks.length})</h2>
           {chunks.length > 0 ? (
             <span className="text-xs text-muted-foreground">
@@ -146,41 +154,78 @@ export const DocumentDetailPage = () => {
             This document has not been indexed yet.
           </div>
         ) : (
-          <ul className="space-y-3">
-            {chunks.map(chunk => {
-              const neighbors = neighborsByChunk[chunk.chunkNo] ?? initialNeighborsState
-              const isOpen = neighbors.status !== 'idle'
-              return (
-                <li
-                  key={chunk.id}
-                  className="rounded-[1.25rem] border border-border/80 bg-card/95 p-5 shadow-[0_8px_24px_rgba(24,51,35,0.04)]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-3 font-mono">
-                      <span className="font-semibold text-foreground">#{chunk.chunkNo}</span>
-                      <span>{chunk.charCount} chars</span>
-                      <span className="truncate" title={chunk.contentHash}>
-                        sha:{chunk.contentHash.slice(0, 8)}
-                      </span>
+          <>
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+                <span>
+                  Showing #{visibleChunks[0]?.chunkNo} – #
+                  {visibleChunks[visibleChunks.length - 1]?.chunkNo} of {chunks.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Prev
+                  </Button>
+                  <span className="font-mono">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            <ul className="space-y-3">
+              {visibleChunks.map(chunk => {
+                const neighbors = neighborsByChunk[chunk.chunkNo] ?? initialNeighborsState
+                const isOpen = neighbors.status !== 'idle'
+                return (
+                  <li
+                    key={chunk.id}
+                    className="rounded-[1.25rem] border border-border/80 bg-card/95 p-5 shadow-[0_8px_24px_rgba(24,51,35,0.04)]"
+                  >
+                    <div className="flex h-56 flex-col">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3 font-mono">
+                          <span className="font-semibold text-foreground">#{chunk.chunkNo}</span>
+                          <span>{chunk.charCount} chars</span>
+                          <span className="truncate" title={chunk.contentHash}>
+                            sha:{chunk.contentHash.slice(0, 8)}
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleToggleNeighbors(chunk.chunkNo)}
+                        >
+                          <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                          {isOpen ? 'Hide neighbors' : 'Show neighbors'}
+                        </Button>
+                      </div>
+                      <pre className="mt-3 flex-1 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
+                        {chunk.text || (
+                          <span className="italic text-muted-foreground">(empty)</span>
+                        )}
+                      </pre>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleToggleNeighbors(chunk.chunkNo)}
-                    >
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                      {isOpen ? 'Hide neighbors' : 'Show neighbors'}
-                    </Button>
-                  </div>
-                  <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">
-                    {chunk.text || <span className="italic text-muted-foreground">(empty)</span>}
-                  </pre>
 
-                  {isOpen ? <NeighborsPanel state={neighbors} /> : null}
-                </li>
-              )
-            })}
-          </ul>
+                    {isOpen ? <NeighborsPanel state={neighbors} /> : null}
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
       </div>
     </div>
@@ -214,27 +259,31 @@ const NeighborsPanel = ({ state }: { state: NeighborsState }) => {
     return (
       <div className="mt-4 space-y-3 border-t border-dashed border-border/60 pt-4">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-          Neighbors
+          Neighbors ({state.payload.neighbors.length})
         </p>
-        <ul className="space-y-2">
+        <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
           {state.payload.neighbors.map(neighbor => (
             <li
               key={`${neighbor.documentId}-${neighbor.chunkNo}`}
               className="rounded-md border border-border/60 bg-muted/30 p-3"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2 font-mono">
-                  <span className="font-semibold text-foreground">{neighbor.score.toFixed(3)}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="truncate">
-                    {neighbor.documentTitle} #{neighbor.chunkNo}
-                  </span>
+              <div className="flex h-32 flex-col">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="font-semibold text-foreground">
+                      {neighbor.score.toFixed(3)}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="truncate">
+                      {neighbor.documentTitle} #{neighbor.chunkNo}
+                    </span>
+                  </div>
+                  <span>{neighbor.charCount} chars</span>
                 </div>
-                <span>{neighbor.charCount} chars</span>
+                <pre className="mt-2 flex-1 overflow-y-auto whitespace-pre-wrap break-words font-sans text-xs leading-5 text-foreground">
+                  {neighbor.text || <span className="italic text-muted-foreground">(empty)</span>}
+                </pre>
               </div>
-              <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs leading-5 text-foreground">
-                {neighbor.text || <span className="italic text-muted-foreground">(empty)</span>}
-              </pre>
             </li>
           ))}
         </ul>
