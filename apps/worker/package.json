@@ -1,0 +1,10 @@
+{
+  "name": "@indexa/worker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Python vectorization worker — this package.json is a pnpm proxy that forwards dev/test to the uv-managed Python project.",
+  "scripts": {
+    "dev": "uv run python -m indexa_worker watch",
+    "test": "uv run pytest"
+  }
+}

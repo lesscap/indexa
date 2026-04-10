@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "dev": "pnpm --parallel --filter @indexa/server --filter @indexa/web dev",
+    "dev": "pnpm --parallel --filter @indexa/server --filter @indexa/web --filter @indexa/worker dev",
     "build": "pnpm -r --filter './apps/*' build",
     "typecheck": "pnpm -r --filter './apps/*' typecheck",
     "lint": "pnpm -r --filter './apps/*' lint",

@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Development (starts server + web in parallel)
+# Development (starts server + web + worker watch in parallel)
 pnpm dev
 
 # Build / lint / typecheck / test all apps
@@ -34,7 +34,8 @@ pnpm --filter @indexa/server prisma:seed            # seed dev data (admin / ind
 # Worker (from apps/worker, Python 3.12 + uv)
 cd apps/worker && uv sync                          # install Python deps
 cd apps/worker && uv run pytest                    # run tests
-cd apps/worker && uv run python -m indexa_worker run --batch 5   # process QUEUED jobs once
+cd apps/worker && uv run python -m indexa_worker run     # one-shot, cron-friendly
+cd apps/worker && uv run python -m indexa_worker watch   # long-running, LISTEN/NOTIFY
 ```
 
 ## Architecture
@@ -63,11 +64,14 @@ pnpm monorepo (`pnpm@10.32.1`) + one Python sub-project. Apps under `apps/`. `pa
 - **API client**: `src/lib/api.ts` — typed fetch wrappers. All responses follow `{ success, data } | { success, code, message }`
 - **Tests**: `src/test/` and colocated `*.test.tsx`, vitest with jsdom + Testing Library
 
-### apps/worker — Python Vectorization Worker (`indexa-worker`)
+### apps/worker — Python Vectorization Worker (`@indexa/worker`)
 
-- **Stack**: Python 3.12 + uv. Not a Node package — does not participate in `pnpm dev`
-- **Role**: one-shot script consuming `IndexJob` queue, runs PARSING → CHUNKING → EMBEDDING → UPSERTING → FINALIZING
-- **Trigger**: external cron / launchd invokes `uv run python -m indexa_worker run`
+- **Stack**: Python 3.12 + uv. `package.json` is a pnpm proxy that forwards dev/test to uv, so the worker joins `pnpm dev` alongside server + web
+- **Role**: consume `IndexJob` queue, run PARSING → CHUNKING → EMBEDDING → UPSERTING → FINALIZING
+- **Triggers**:
+  - `watch` — long-running daemon using Postgres `LISTEN indexa_job` for real-time wakeups; 30s fallback poll; this is what `pnpm dev` runs
+  - `run` — one-shot, cron-friendly; also usable as a safety net alongside `watch`
+- **Server handoff**: `queueStoredDocument` issues `SELECT pg_notify('indexa_job', <job_id>)` inside the IndexJob insert transaction, so notifications fire atomically with commit
 - **DB access**: SQLAlchemy Core 2.0 (no ORM) + psycopg 3. Table definitions in `src/indexa_worker/schema.py` mirror Prisma names manually — `apps/server/prisma/schema.prisma` is source of truth
 - **Queue**: Postgres `SELECT ... FOR UPDATE SKIP LOCKED`, no Redis
 - **External deps**: Qdrant (vector store), DashScope QWEN `text-embedding-v3` (embeddings)
