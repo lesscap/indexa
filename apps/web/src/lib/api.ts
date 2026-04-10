@@ -67,6 +67,35 @@ export type DocumentSummary = {
   } | null
 }
 
+export type ChunkDetail = {
+  id: string
+  chunkNo: number
+  charCount: number
+  contentHash: string
+  qdrantPointId: string
+  text: string
+}
+
+export type DocumentChunksPayload = {
+  document: DocumentSummary
+  libraryIndexId: string | null
+  chunks: ChunkDetail[]
+}
+
+export type ChunkNeighbor = {
+  score: number
+  chunkNo: number
+  charCount: number
+  documentId: string
+  documentTitle: string
+  text: string
+}
+
+export type ChunkNeighborsPayload = {
+  sourceChunkNo: number
+  neighbors: ChunkNeighbor[]
+}
+
 export type UploadSessionSummary = {
   id: string
   tusUploadId: string
@@ -189,6 +218,18 @@ export const listDocuments = async (libraryId: string) => {
   )
 
   return data.list
+}
+
+export const getDocumentChunks = (libraryId: string, documentId: string) => {
+  return request<DocumentChunksPayload>(
+    `/api/console/libraries/${libraryId}/documents/${documentId}/chunks`,
+  )
+}
+
+export const getChunkNeighbors = (libraryId: string, documentId: string, chunkNo: number) => {
+  return request<ChunkNeighborsPayload>(
+    `/api/console/libraries/${libraryId}/documents/${documentId}/chunks/${chunkNo}/neighbors`,
+  )
 }
 
 export const listUploads = async (libraryId: string) => {

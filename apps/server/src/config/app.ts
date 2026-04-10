@@ -22,3 +22,8 @@ export const storage = {
   documentRoot: process.env.DOCUMENT_STORAGE_ROOT || path.join(appRoot, 'storage'),
   uploadRoot: process.env.UPLOAD_STORAGE_ROOT || path.join(appRoot, 'storage', '_uploads'),
 }
+
+export const qdrant = {
+  url: process.env.QDRANT_URL || 'http://127.0.0.1:6333',
+  apiKey: process.env.QDRANT_API_KEY || undefined,
+}

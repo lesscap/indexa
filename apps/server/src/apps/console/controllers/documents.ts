@@ -57,6 +57,138 @@ export const DocumentsController = (app: WebApplication) => {
     },
   )
 
+  app.get(
+    '/:documentId/chunks',
+    {
+      schema: {
+        summary: 'Get a document with all its chunks for the current domain',
+        tags: ['console.documents'],
+        params: {
+          type: 'object',
+          required: ['libraryId', 'documentId'],
+          properties: {
+            libraryId: { type: 'string', minLength: 1 },
+            documentId: { type: 'string', minLength: 1 },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { libraryId: string; documentId: string } }>,
+      reply,
+    ) => {
+      const currentDomainId = getCurrentDomainId(request)
+
+      if (!currentDomainId) {
+        const response: ApiResponse = {
+          success: false,
+          code: 'CURRENT_DOMAIN_REQUIRED',
+          message: 'currentDomainId is required in session.',
+        }
+
+        return reply.code(401).send(response)
+      }
+
+      const result = await service.listChunks(
+        currentDomainId,
+        request.params.libraryId,
+        request.params.documentId,
+      )
+
+      if (!result.ok) {
+        const response: ApiResponse = {
+          success: false,
+          code: result.code,
+          message: 'Document was not found in the current domain.',
+        }
+
+        return reply.code(404).send(response)
+      }
+
+      const response: ApiResponse<typeof result.data> = {
+        success: true,
+        data: result.data,
+      }
+
+      return response
+    },
+  )
+
+  app.get(
+    '/:documentId/chunks/:chunkNo/neighbors',
+    {
+      schema: {
+        summary: 'Get vector neighbors for a chunk via Qdrant recommend',
+        tags: ['console.documents'],
+        params: {
+          type: 'object',
+          required: ['libraryId', 'documentId', 'chunkNo'],
+          properties: {
+            libraryId: { type: 'string', minLength: 1 },
+            documentId: { type: 'string', minLength: 1 },
+            chunkNo: { type: 'integer', minimum: 0 },
+          },
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 50, default: 8 },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { libraryId: string; documentId: string; chunkNo: number }
+        Querystring: { limit?: number }
+      }>,
+      reply,
+    ) => {
+      const currentDomainId = getCurrentDomainId(request)
+
+      if (!currentDomainId) {
+        const response: ApiResponse = {
+          success: false,
+          code: 'CURRENT_DOMAIN_REQUIRED',
+          message: 'currentDomainId is required in session.',
+        }
+
+        return reply.code(401).send(response)
+      }
+
+      const result = await service.getChunkNeighbors(
+        currentDomainId,
+        request.params.libraryId,
+        request.params.documentId,
+        request.params.chunkNo,
+        request.query.limit ?? 8,
+      )
+
+      if (!result.ok) {
+        const statusCode = result.code === 'LIBRARY_INDEX_MISSING' ? 409 : 404
+        const response: ApiResponse = {
+          success: false,
+          code: result.code,
+          message:
+            result.code === 'LIBRARY_INDEX_MISSING'
+              ? 'Library has no active index.'
+              : result.code === 'CHUNK_NOT_FOUND'
+                ? 'Chunk was not found for this document.'
+                : 'Document was not found in the current domain.',
+        }
+
+        return reply.code(statusCode).send(response)
+      }
+
+      const response: ApiResponse<typeof result.data> = {
+        success: true,
+        data: result.data,
+      }
+
+      return response
+    },
+  )
+
   app.post(
     '/',
     {

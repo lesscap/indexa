@@ -1,4 +1,5 @@
 import { FolderOpen } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import type { DocumentSummary } from '@/lib/api'
 import { formatBytes, formatDate, getDocumentStatusVariant } from './utils'
@@ -8,6 +9,8 @@ type DocumentsTableProps = {
 }
 
 export const DocumentsTable = ({ documents }: DocumentsTableProps) => {
+  const { libraryId = '' } = useParams()
+  const navigate = useNavigate()
   return (
     <div className="rounded-[1.75rem] border border-border/80 bg-card/95 p-6 shadow-[0_18px_48px_rgba(24,51,35,0.06)]">
       <div className="flex flex-col gap-3 border-b border-border/80 pb-5 md:flex-row md:items-end md:justify-between">
@@ -45,7 +48,11 @@ export const DocumentsTable = ({ documents }: DocumentsTableProps) => {
             </thead>
             <tbody className="divide-y divide-border bg-card">
               {documents.map(document => (
-                <tr key={document.id}>
+                <tr
+                  key={document.id}
+                  className="cursor-pointer transition hover:bg-secondary/40"
+                  onClick={() => navigate(`/libraries/${libraryId}/documents/${document.id}`)}
+                >
                   <td className="px-4 py-4">
                     <div>
                       <p className="font-medium text-foreground">{document.title}</p>

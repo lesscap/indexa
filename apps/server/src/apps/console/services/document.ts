@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -138,6 +138,28 @@ const saveSourceFile = async (file: MultipartFile, targetPath: string) => {
   return {
     checksumSha256: digest.digest('hex'),
     sizeBytes,
+  }
+}
+
+export const readChunkText = async (
+  storageRoot: string,
+  relativeTextPath: string,
+): Promise<string> => {
+  // textPath is a POSIX-ish relative path written by the Python worker
+  // (e.g. "chunks/<libraryIndexId>/<documentId>/chunk-00003.txt"). Resolve
+  // it against the storage root and reject anything that escapes the root
+  // to defend against traversal in case a malicious writer slipped in.
+  const absolute = path.resolve(storageRoot, relativeTextPath)
+  const rootWithSep = path.resolve(storageRoot) + path.sep
+  if (!absolute.startsWith(rootWithSep)) {
+    throw new Error(`chunk textPath escapes storage root: ${relativeTextPath}`)
+  }
+  try {
+    return await readFile(absolute, 'utf-8')
+  } catch (error) {
+    throw Object.assign(new Error(`failed to read chunk text: ${relativeTextPath}`), {
+      cause: error,
+    })
   }
 }
 
@@ -349,8 +371,206 @@ export const DocumentService = (app: WebApplication) => {
     }
   }
 
+  const findDocumentInScope = async (
+    currentDomainId: string,
+    libraryId: string,
+    documentId: string,
+  ) => {
+    return app.$prisma.document.findFirst({
+      where: {
+        id: documentId,
+        libraryId,
+        library: {
+          domainId: currentDomainId,
+        },
+      },
+      include: {
+        library: {
+          select: {
+            id: true,
+            activeIndexId: true,
+            activeIndex: {
+              select: {
+                id: true,
+                qdrantCollectionName: true,
+              },
+            },
+          },
+        },
+        indexStates: {
+          take: 1,
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+    })
+  }
+
+  const loadChunkText = async (textPath: string): Promise<string> => {
+    try {
+      return await readChunkText(storageConfig.documentRoot, textPath)
+    } catch (error) {
+      app.log.warn({ err: error, textPath }, 'failed to read chunk text, returning empty')
+      return ''
+    }
+  }
+
+  const listChunks = async (
+    currentDomainId: string,
+    libraryId: string,
+    documentId: string,
+  ) => {
+    const document = await findDocumentInScope(currentDomainId, libraryId, documentId)
+    if (!document) {
+      return { ok: false as const, code: 'DOCUMENT_NOT_FOUND' as const }
+    }
+
+    const activeIndexId = document.library.activeIndexId
+    const summary = toDocumentSummary({
+      ...document,
+      currentIndexState: document.indexStates[0] || null,
+    })
+
+    if (!activeIndexId) {
+      return {
+        ok: true as const,
+        data: {
+          document: summary,
+          libraryIndexId: null,
+          chunks: [] as Array<{
+            id: string
+            chunkNo: number
+            charCount: number
+            contentHash: string
+            qdrantPointId: string
+            text: string
+          }>,
+        },
+      }
+    }
+
+    const chunkRows = await app.$prisma.documentChunk.findMany({
+      where: { documentId, libraryIndexId: activeIndexId },
+      orderBy: { chunkNo: 'asc' },
+      select: {
+        id: true,
+        chunkNo: true,
+        charCount: true,
+        contentHash: true,
+        qdrantPointId: true,
+        textPath: true,
+      },
+    })
+
+    const chunks = await Promise.all(
+      chunkRows.map(async row => ({
+        id: row.id,
+        chunkNo: row.chunkNo,
+        charCount: row.charCount,
+        contentHash: row.contentHash,
+        qdrantPointId: row.qdrantPointId,
+        text: await loadChunkText(row.textPath),
+      })),
+    )
+
+    return {
+      ok: true as const,
+      data: {
+        document: summary,
+        libraryIndexId: activeIndexId,
+        chunks,
+      },
+    }
+  }
+
+  const getChunkNeighbors = async (
+    currentDomainId: string,
+    libraryId: string,
+    documentId: string,
+    chunkNo: number,
+    limit: number,
+  ) => {
+    const document = await findDocumentInScope(currentDomainId, libraryId, documentId)
+    if (!document) {
+      return { ok: false as const, code: 'DOCUMENT_NOT_FOUND' as const }
+    }
+
+    const activeIndex = document.library.activeIndex
+    if (!document.library.activeIndexId || !activeIndex) {
+      return { ok: false as const, code: 'LIBRARY_INDEX_MISSING' as const }
+    }
+
+    const sourceChunk = await app.$prisma.documentChunk.findFirst({
+      where: {
+        documentId,
+        libraryIndexId: document.library.activeIndexId,
+        chunkNo,
+      },
+      select: { qdrantPointId: true },
+    })
+
+    if (!sourceChunk) {
+      return { ok: false as const, code: 'CHUNK_NOT_FOUND' as const }
+    }
+
+    const recommended = await app.$qdrant.recommend(activeIndex.qdrantCollectionName, {
+      positive: [sourceChunk.qdrantPointId],
+      limit,
+      with_payload: false,
+    })
+
+    if (recommended.length === 0) {
+      return {
+        ok: true as const,
+        data: { sourceChunkNo: chunkNo, neighbors: [] },
+      }
+    }
+
+    const pointIds = recommended.map(point => String(point.id))
+    const neighborRows = await app.$prisma.documentChunk.findMany({
+      where: {
+        libraryIndexId: document.library.activeIndexId,
+        qdrantPointId: { in: pointIds },
+      },
+      select: {
+        chunkNo: true,
+        charCount: true,
+        textPath: true,
+        qdrantPointId: true,
+        document: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    })
+
+    const byPointId = new Map(neighborRows.map(row => [row.qdrantPointId, row]))
+
+    const neighbors = await Promise.all(
+      recommended
+        .map(point => ({ point, row: byPointId.get(String(point.id)) }))
+        .filter((entry): entry is { point: (typeof recommended)[number]; row: (typeof neighborRows)[number] } => entry.row != null)
+        .map(async ({ point, row }) => ({
+          score: point.score,
+          chunkNo: row.chunkNo,
+          charCount: row.charCount,
+          documentId: row.document.id,
+          documentTitle: row.document.title,
+          text: await loadChunkText(row.textPath),
+        })),
+    )
+
+    return {
+      ok: true as const,
+      data: { sourceChunkNo: chunkNo, neighbors },
+    }
+  }
+
   return {
     list,
     upload,
+    listChunks,
+    getChunkNeighbors,
   }
 }
